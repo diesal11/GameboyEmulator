@@ -32,11 +32,11 @@ public class Z80 {
 	protected int PC;
 
 	// CPU Class variables
-	private Cardridge cardridge;
+	private Cartridge cardridge;
 	private int lastException = 0;
 
 	public Z80(String filename) {
-		cardridge = new Cardridge(filename);
+		cardridge = new Cartridge(filename);
 		if (cardridge.getError() != null) {
 			System.out.println("ERROR: " + cardridge.getError());
 		} else {

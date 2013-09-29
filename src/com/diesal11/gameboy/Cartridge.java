@@ -6,7 +6,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 
-public class Cardridge {
+public class Cartridge {
 	// the size of the ROM banks in byte
 	private static final int ROM_BANK_SIZE = 0x4000;
 
@@ -23,7 +23,7 @@ public class Cardridge {
 	private boolean ram_enabled = false;// Whether RAM is enabled to read and
 										// write
 
-	public Cardridge(String file_name)
+	public Cartridge(String file_name)
 	/**
 	 * constructs a new instance of Cardridge pre: fileName is the name of a
 	 * cardridge post: f an error occurred while loading getError() contains the
@@ -299,7 +299,7 @@ public class Cardridge {
 	}
 
 	public static void main(String[] args) throws IOException {
-		Cardridge card = new Cardridge("./SuperMarioLand.gb");
+		Cartridge card = new Cartridge("./SuperMarioLand.gb");
 		if (card.getError() != null) {
 			System.out.println("ERROR: " + card.getError());
 		} else {
