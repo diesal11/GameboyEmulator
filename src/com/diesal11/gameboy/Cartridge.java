@@ -1,9 +1,9 @@
 package com.diesal11.gameboy;
 
+import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 
 public class Cartridge {
@@ -20,8 +20,8 @@ public class Cartridge {
 
 	private int MBC; // The MBC used in the cardridge
 
-	private boolean ram_enabled = false;// Whether RAM is enabled to read and
-										// write
+	private boolean ram_enabled = false;// Whether RAM is enabled to read and write
+	private int		rom_bank_nr = 0;
 
 	public Cartridge(String file_name)
 	/**
@@ -57,14 +57,15 @@ public class Cartridge {
 		int[] first_rom_bank = new int[ROM_BANK_SIZE];
 		System.out.println("Attempting to load ROM: `" + file_name + "'");
 		try {
-			File card = new File(file_name);
-			FileInputStream fistream = new FileInputStream(card);
-			DataInputStream distream = new DataInputStream(fistream);
+			FileInputStream fistream = new FileInputStream(file_name);
+			BufferedInputStream bistream = new BufferedInputStream(fistream);
+			DataInputStream distream = new DataInputStream(bistream);
 
 			// load first ROM bank into memory
 			for (int i = 0; i < ROM_BANK_SIZE; ++i)
 				first_rom_bank[i] = distream.readUnsignedByte();
-
+			
+			distream.close();
 		} catch (Exception e) {
 			err_msg = "Error while loading ROM bank #0 " + e.getMessage();
 		}
@@ -118,7 +119,7 @@ public class Cartridge {
 				ROM = new int[96][0x81];
 				System.out.println("ROM size = 1.5MByte (96 banks)");
 				break;
-		} // switch(header[0x0148])
+		}
 
 		// Determine RAM size
 		switch (first_rom_bank[0x0149]) {
@@ -149,13 +150,12 @@ public class Cartridge {
 		// load entire ROM/RAM into memory
 		int t = 0;
 		try {
-			File card = new File(file_name);
-			System.out.println("Cardsize = " + card.length() + " bytes (" + card.length() / ROM_BANK_SIZE + " banks)");
-			FileInputStream fistream = new FileInputStream(card);
-			DataInputStream distream = new DataInputStream(fistream);
+			FileInputStream fistream = new FileInputStream(file_name);
+			BufferedInputStream bistream = new BufferedInputStream(fistream);
+			DataInputStream distream = new DataInputStream(bistream);
 
 			// load ROM into memory
-			System.out.println("ROM should have " + ROM.length + " banks");
+			System.out.println("Trying to load " + ROM.length + " banks from ROM");
 			for (int i = 0; i < ROM.length; i++) {
 				for (int j = 0; j < ROM_BANK_SIZE; j++) {
 					ROM[i][j] = distream.readUnsignedByte();
@@ -172,7 +172,7 @@ public class Cartridge {
 			 */
 
 			t = 2;
-			System.out.println("Loaded " + (ROM.length * ROM[0].length + RAM.length * RAM[0].length) + " bytes of ROM and RAM into memory");
+			System.out.println("Cartridge is using " + (ROM.length * ROM[0].length + RAM.length * RAM[0].length) + " bytes of ROM and RAM into memory");
 		} catch (Exception e) {
 			err_msg = "Error while loading ROM/RAM " + e.toString() + " " + t;
 		}
@@ -246,9 +246,9 @@ public class Cartridge {
 	}
 
 	public void write(int index, int value) {
-		// TODO fatsoenlijk
+		// TODO Use rom_bank_nr
 		// Switch RAM/ROM and bank numbers
-
+			/*HAX*/ ROM[0][index] = value;
 		//
 		switch (MBC) {
 			case 0x0001:
@@ -273,6 +273,34 @@ public class Cartridge {
 			case 0x0005:
 			case 0x0006:
 				// MBC2
+				// 0000-3FFF - ROM Bank 00 (Read Only)0000-3FFF - ROM Bank 00 (Read Only)
+                // 4000-7FFF - ROM Bank 01-0F (Read Only)
+                // A000-A1FF - 512x4bits RAM, built-in into the MBC2 chip (Read/Write)
+                // 0000-1FFF - RAM Enable (Write Only)
+                // 2000-3FFF - ROM Bank Number (Write Only)
+				
+                if ((0xA0000 <= index) && (index <= 0xA1FF))
+                {
+                	System.out.println("TODO: write to internal cartridge RAM.");
+                }
+                else if ((0x0000 <= index) && (index <= 0x1FFF))
+                {
+                    if ((index & 1 << 4) == 0)
+                    {
+                        // toggle RAM enabled
+                        ram_enabled = !ram_enabled;
+                    }
+
+                }
+                else if ((0x2000 <= index) && (index <= 0x3FFFF))
+                {
+                    if ((index & 1 << 4) == (1 << 4))
+                    {
+                        // Enable set ROM bank nr
+                    	value = (value == 0)?1:value;
+                        rom_bank_nr = value & 0x0F;
+                    }
+                }
 				break;
 			case 0x000F:
 			case 0x0010:
