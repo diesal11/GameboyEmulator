@@ -27,6 +27,11 @@ public class Z80 {
 	protected static final int H = 6;
 	protected static final int L = 7;
 
+	private int[] HRAM = new int[0x7F]; //HighRAM
+	private int[][] WRAM = new int[0x08][0x10000]; //8x4k InternalRAM
+	private int CurrentWRAMBank = 0;
+
+	protected int IR;
 	protected int PC;
 	protected int SP;
 	// CPU Class variables
@@ -38,6 +43,112 @@ public class Z80 {
 		deasm = new Disassembler(cartridge, this);
 		this.cartridge = cartridge;
 		reset();
+	}
+
+	private int read(int index) {
+		/* Memorymap:
+		 * 0000-3FFF   16KB ROM Bank 00     (in cartridge, fixed at bank 00)
+		 * 4000-7FFF   16KB ROM Bank 01..NN (in cartridge, switchable bank number)
+		 * 8000-9FFF   8KB Video RAM (VRAM) (switchable bank 0-1 in CGB Mode)
+		 * A000-BFFF   8KB External RAM     (in cartridge, switchable bank, if any)
+		 * C000-CFFF   4KB Work RAM Bank 0 (WRAM)
+		 * D000-DFFF   4KB Work RAM Bank 1 (WRAM)  (switchable bank 1-7 in CGB Mode)
+		 * E000-FDFF   Same as C000-DDFF (ECHO)    (typically not used)
+		 * FE00-FE9F   Sprite Attribute Table (OAM)
+		 * FEA0-FEFF   Not Usable
+		 * FF00-FF7F   I/O Ports
+		 * FF80-FFFE   High RAM (HRAM)
+		 * FFFF        Interrupt Enable Register
+		 */
+		int b = 0; // b==byte read
+		if (index < 0) { //Invalid
+			System.out.println("ERROR: CPU.read(): No negative addresses in GameBoy memorymap.");
+			b = -1;
+		} else if (index < 0x4000) { //16KB ROM Bank 00     (in cartridge, fixed at bank 00)
+			b = cartridge.read(index);
+		} else if (index < 0x8000) { //16KB ROM Bank 01..NN (in cartridge, switchable bank number)
+			b = cartridge.read(index);
+		} else if (index < 0xA000) { //8KB Video RAM (VRAM) (switchable bank 0-1 in CGB Mode)
+			System.out.println("TODO: CPU.read(): VRAM Read");
+			b = 0;
+		} else if (index < 0xC000) { //8KB External RAM     (in cartridge, switchable bank, if any)
+			b=cartridge.read(index);
+		} else if (index < 0xd000) { //4KB Work RAM Bank 0 (WRAM)
+			b = WRAM[0][index - 0xc000];
+		} else if (index < 0xe000) { //4KB Work RAM Bank 1 (WRAM)  (switchable bank 1-7 in CGB Mode)
+			b = WRAM[CurrentWRAMBank][index - 0xd000];
+		} else if (index < 0xfe00) { //Same as C000-DDFF (ECHO)    (typically not used)
+			System.out.println("TODO: CPU.read(): ECHO RAM Read");
+			b = read(index - 0x2000);
+		} else if (index < 0xfea0) { //Sprite Attribute Table (OAM)
+			System.out.println("TODO: CPU.read(): Sprite Attribute Table");
+			b = 0;
+		} else if (index < 0xff00) { //Not Usable
+			System.out.println("WARNING: CPU.read(): Read from unusable memory (0xfea-0xfeff)");
+			b = 0;
+		} else if (index < 0xff80) { //I/O Ports
+			System.out.println("TODO: CPU.read(): Read from IO ports");
+			if (index == 0xff44) HRAM[index - 0xff00] = (HRAM[index - 0xff00] + 1) % 153;//vblank hax
+			b = 0;
+		} else if (index < 0xffff) { //High RAM (HRAM)
+			b = HRAM[index-0xff80];
+		} else if (index < 0x10000) { // Interrupt Enable Register (0xffff)
+			System.out.println("TODO: CPU.read(): Read from Interrupt Enable Register (0xffff)");
+			b = 0;
+		} else {
+			System.out.println("ERROR: CPU.read(): Out of range memory access: $" + index);
+			b = 0;
+		}
+		return b;
+	}
+
+	private void write(int index, int value) {
+		/* Memorymap:
+		 * 0000-3FFF   16KB ROM Bank 00     (in cartridge, fixed at bank 00)
+		 * 4000-7FFF   16KB ROM Bank 01..NN (in cartridge, switchable bank number)
+		 * 8000-9FFF   8KB Video RAM (VRAM) (switchable bank 0-1 in CGB Mode)
+		 * A000-BFFF   8KB External RAM     (in cartridge, switchable bank, if any)
+		 * C000-CFFF   4KB Work RAM Bank 0 (WRAM)
+		 * D000-DFFF   4KB Work RAM Bank 1 (WRAM)  (switchable bank 1-7 in CGB Mode)
+		 * E000-FDFF   Same as C000-DDFF (ECHO)    (typically not used)
+		 * FE00-FE9F   Sprite Attribute Table (OAM)
+		 * FEA0-FEFF   Not Usable
+		 * FF00-FF7F   I/O Ports
+		 * FF80-FFFE   High RAM (HRAM)
+		 * FFFF        Interrupt Enable Register
+		 */
+		if (index < 0) { //Invalid
+			System.out.println("ERROR: CPU.write(): No negative addresses in GameBoy memorymap.");
+		} else if (index < 0x4000) { //16KB ROM Bank 00     (in cartridge, fixed at bank 00)
+			cartridge.write(index, value);
+		} else if (index < 0x8000) { //16KB ROM Bank 01..NN (in cartridge, switchable bank number)
+			cartridge.write(index, value);
+		} else if (index < 0xA000) { //8KB Video RAM (VRAM) (switchable bank 0-1 in CGB Mode)
+			System.out.println("TODO: CPU.write(): VRAM Write");
+		} else if (index < 0xC000) { //8KB External RAM     (in cartridge, switchable bank, if any)
+			cartridge.write(index, value);
+		} else if (index < 0xd000) { //4KB Work RAM Bank 0 (WRAM)
+			WRAM[0][index - 0xc000] = value;
+		} else if (index < 0xe000) { //4KB Work RAM Bank 1 (WRAM)  (switchable bank 1-7 in CGB Mode)
+			WRAM[CurrentWRAMBank][index - 0xd000] = value;
+		} else if (index < 0xfe00) { //Same as C000-DDFF (ECHO)    (typically not used)
+			write(index-0x2000, value);
+		} else if (index < 0xfea0) { //Sprite Attribute Table (OAM)
+			System.out.println("TODO: CPU.write(): Sprite Attribute Table");
+		} else if (index < 0xff00) { //Not Usable
+			System.out.println("TODO: CPU.write(): Write to unusable memory (0xfea-0xfeff)");
+		} else if (index < 0xff80) { //I/O Ports
+			System.out.println("TODO: CPU.write(): Write to IO ports");
+			if (index == 0xff70) { //FF70 - SVBK - CGB Mode Only - WRAM Bank
+				CurrentWRAMBank = Math.max(value & 0x07, 1);
+			}
+		} else if (index < 0xffff) { //High RAM (HRAM)
+			HRAM[index-0xff80] = value;
+		} else if (index < 0x10000) { // Interrupt Enable Register (0xffff)
+			System.out.println("TODO: CPU.write(): Write to Interrupt Enable Register (0xffff)");
+		} else {
+			System.out.println("ERROR: CPU.write(): Out of range memory access: $" + index);
+		}
 	}
 
 	public void reset() {
@@ -98,13 +209,6 @@ public class Z80 {
 		return TotalInstrCount;
 	}
 
-	private String disassembleinstruction() {
-		int instr = cartridge.read(PC);
-		String s = String.format("$%02x\t", instr);
-		// TODO take count of BC
-		return String.format("$%02x\t", cartridge.read(PC))+deasm.disassemble(PC);
-	}
-
 	protected void printCPUstatus() {
 		String flags = "";
 		flags += ((regs[FLAG_REG] & ZF_Mask) == ZF_Mask) ? "Z " : "z ";
@@ -118,11 +222,15 @@ public class Z80 {
 		System.out.println("---CPU Status for cycle " + TotalInstrCount + "---");
 		System.out.printf("   A=$%02x    B=$%02x    C=$%02x    D=$%02x   E=$%02x   F=$%02x   H=$%02x   L=$%02x\n", regs[A], regs[B], regs[C], regs[D], regs[E], regs[F], regs[H], regs[L]);
 		System.out.printf("  PC=$%04x SP=$%04x                           flags=" + flags + "\n", PC, SP);
-		System.out.printf("  $%04x %s\n", PC, disassembleinstruction());
+		System.out.println("  " + deasm.disassemble(PC));
 	}
 
 	protected int readmem8b(int H, int L) {
-		return cartridge.read((regs[H] << 8) | regs[L]);
+		return read((regs[H] << 8) | regs[L]);
+	}
+
+	protected void writemem8b(int H, int L, int val) {
+		write((regs[H] << 8) | regs[L], val);
 	}
 
 	protected void inc8b(int reg_index) {
@@ -157,7 +265,24 @@ public class Z80 {
 		regs[FLAG_REG] = regs[FLAG_REG] | NF_Mask;
 	}
 
-	protected void inc16b() {
+	protected void inc16b(int ri1, int ri2) {
+		// 16-bit inc/dec doesnt affect any flags
+		++regs[ri2];
+		if (regs[ri2] > 0xFF) {
+			regs[ri2] &= 0xFF;
+			++regs[ri1];
+			regs[ri1] &= 0xFF;
+		}
+	}
+
+	protected void dec16b(int ri1, int ri2) {
+		// 16-bit inc/dec doesnt affect any flags
+		--regs[ri2];
+		if (regs[ri2] < 0) {
+			regs[ri2] &= 0xFF;
+			--regs[ri1];
+			regs[ri1] &= 0xFF;
+		}
 	}
 
 	protected void add8b(int dest, int val) {
@@ -204,26 +329,38 @@ public class Z80 {
 		regs[dest] = val;
 	}
 
+	protected void ld8bmem(int location, int val) {
+		write(location, val);
+	}
+
 	protected void cp(int val) {
-		// Set NF, Clear other flags
-		regs[FLAG_REG] = NF_Mask;
+		int i = regs[A];
+		sub8b(A, val);
+		regs[A] = i;
+	}
 
-		int i = regs[A] - val;
+	protected void xor(int val) {
+		regs[F] = 0;
+		regs[A] ^= val;
+		regs[F] |= (regs[A] == 0 ? ZF_Mask : 0);
+	}
 
-		// Set ZF
-		regs[FLAG_REG] |= (i == 0) ? ZF_Mask : 0;
+	protected void or(int val) {
+		regs[F] = 0;
+		regs[A] |= val;
+		regs[F] |= (regs[A] == 0 ? ZF_Mask : 0);
+	}
 
-		// Set HC
-		regs[FLAG_REG] |= ((regs[A] & 0x0f) - (val & 0x0f))< 0 ? HC_Mask : 0;
-
-		// Set CF
-		regs[FLAG_REG] |= i < 0 ? CF_Mask : 0;
+	protected void and(int val) {
+		regs[F] = HC_Mask;
+		regs[A] &= val;
+		regs[F] |= (regs[A] == 0 ? ZF_Mask : 0);
 	}
 
 	protected void JPnn() {
-		int i = cartridge.read(PC++);
-		int j = cartridge.read(PC++);
-		System.out.println("i="+i+ " j="+j);
+		int i = read(PC++);
+		int j = read(PC++);
+		//System.out.println("i=" + i + " j=" + j);
 		PC = j << 8 | i; //SHOULD be endian correct
 	}
 
@@ -232,52 +369,62 @@ public class Z80 {
 	}
 
 	protected void sbc(int dest, int val) {
-		sub8b(dest, val+((regs[FLAG_REG]&CF_Mask) >> CF_Shift));
+		sub8b(dest, val + ((regs[FLAG_REG] & CF_Mask) >> CF_Shift));
+	}
+
+	protected void adc(int dest, int val) {
+		add8b(dest, val + ((regs[FLAG_REG] & CF_Mask) >> CF_Shift));
 	}
 
 	protected void JRcce(boolean cc, int e) {
-		if (cc)
-			JRe(e);
+		if (cc) JRe(e);
 	}
 
-	protected void push(int val, boolean b16) {
-		System.out.println("Pushing val="+val+" 16b="+b16);
-		if (b16) {
-			//Should be endian correct
-			cartridge.write(SP--, val & 0xff);
-			cartridge.write(SP--, (val >> 8) & 0xff);
-		} else {
-			cartridge.write(SP--, val & 0xff);
-		}
+	protected void push(int val) {
+		//Should be Endian corrent
+		write(--SP, (val >> 8) & 0xFF);
+		write(--SP, val & 0xFF);
+	}
+
+	protected int pop() {
+		//Should be endian correct
+		int l = read(SP++);
+		int h = read(SP++);
+		return (l | (H << 8));
 	}
 
 	protected int fetch() {
-		return cartridge.read(PC);
+		return read(PC);
 	}
 
 	static int nopCount = 0;
+
 	private boolean execute(int instr) {
 		boolean nop = false;
 		//System.out.printf("Executing instruction $%02x\n", instr);
-		++PC;
+		++PC; //FIXME: Is de PC niet ook een register in de CPU?
 		switch (instr) {
 			case 0x00: // NOP
 				nop = true;
 				break;
-/*        case 0x01:  // LD BC,&0000
-	          // TODO
-	          break;
-	        case 0x02:  // LD (BC),A
-	          // TODO
-	          break;
-	        case 0x03:  // INC BC
-	          // TODO
-	          break;*/
+			case 0x01: // LD BC, nn
+				regs[C] = read(PC++);
+				regs[B] = read(PC++);
+				break;
+			case 0x02: // LD (BC), A
+				writemem8b(B, C, regs[A]);
+				break;
+			case 0x03: // INC BC
+				inc16b(B, C);
+				break;
 			case 0x04: // INC B
 				inc8b(B);
 				break;
 			case 0x05: // DEC B
 				dec8b(B);
+				break;
+			case 0x0b: // DEC BC
+				dec16b(B, C);
 				break;
 			case 0x0c: // INC  C
 				inc8b(C);
@@ -285,11 +432,27 @@ public class Z80 {
 			case 0x0d: // DEC  C
 				dec8b(C);
 				break;
+			case 0x11: // LD DE, nn
+				regs[E] = read(PC++);
+				regs[D] = read(PC++);
+				break;
+			case 0x13: // INC DE
+				inc16b(D, E);
+				break;
 			case 0x14: // INC  D
 				inc8b(D);
 				break;
 			case 0x15: // DEC  D
 				dec8b(D);
+				break;
+			case 0x18: {// JR   &00
+				int x = read(PC++);
+				PC += ((x >= 128) ? -(x ^ 0xFF) - 1 : x);
+			}
+				;
+				break;
+			case 0x1b: // DEC DE
+				dec16b(D, E);
 				break;
 			case 0x1c: // INC  E
 				inc8b(E);
@@ -297,11 +460,63 @@ public class Z80 {
 			case 0x1d: // DEC  E
 				dec8b(E);
 				break;
+			case 0x20: // JR NZ, n
+				if ((regs[F] & ZF_Mask) != ZF_Mask) {
+					int x = read(PC++);
+					PC += ((x >= 128) ? -(x ^ 0xFF) - 1 : x);
+				} else
+					++PC;
+				break;
+			case 0x21: // LD HL, nn
+				regs[L] = read(PC++);
+				regs[H] = read(PC++);
+				break;
+			case 0x22: // LDI (HL), A
+				writemem8b(H, L, regs[A]);
+				inc16b(H, L);
+				break;
+			case 0x23: // INC HL
+				inc16b(H, L);
+				break;
+			case 0x28: // JR   Z, n
+				if ((regs[F] & ZF_Mask) == ZF_Mask) {
+					int x = read(PC++);
+					PC += ((x >= 128) ? -(x ^ 0xFF) - 1 : x);
+				} else
+					++PC;
+				break;
+			case 0x2b: // DEC HL
+				dec16b(H, L);
+				break;
 			case 0x2c: // INC L
 				inc8b(L);
 				break;
 			case 0x2d: // DEC  L
 				dec8b(L);
+				break;
+			case 0x2f: // CPL
+				xor(0xFF);
+				break;
+			case 0x31: {// LD SP, nn
+				int l = read(PC++);
+				int h = read(PC++);
+				SP = l | (h << 8);
+			}
+				;
+				break;
+			case 0x33: // INC SP
+				++SP; //16-bit inc/dec doesnt affect any flags
+				SP &= 0xffff;
+				break;
+			case 0x36: // LD (HL), n
+				writemem8b(H, L, read(PC++));
+				break;
+			case 0x3b: // DEC SP
+				--SP; //16-bit inc/dec doesnt affect any flags
+				SP &= 0xffff;
+				break;
+			case 0x3e: // LD A, n
+				regs[A] = read(PC++);
 				break;
 			case 0x40: // LD B, B
 				ld8b(B, regs[B]);
@@ -447,6 +662,53 @@ public class Z80 {
 			case 0x6f: // LD   L,A
 				ld8b(L, regs[A]);
 				break;
+			case 0x70: // LD   (HL),B
+				writemem8b(H, L, regs[B]);
+				break;
+			case 0x71: // LD   (HL),C
+				writemem8b(H, L, regs[C]);
+				break;
+			case 0x72: // LD   (HL),D
+				writemem8b(H, L, regs[D]);
+				break;
+			case 0x73: // LD   (HL),E
+				writemem8b(H, L, regs[E]);
+				break;
+			case 0x74: // LD   (HL),H
+				writemem8b(H, L, regs[H]);
+				break;
+			case 0x75: // LD   (HL),L
+				writemem8b(H, L, regs[L]);
+				break;
+			//case 0x76: // HALT
+			//	break;
+			case 0x77: // LD   (HL),A
+				writemem8b(H, L, regs[A]);
+				break;
+			case 0x78: // LD   A,B
+				ld8b(A, regs[B]);
+				break;
+			case 0x79: // LD   A,C
+				ld8b(A, regs[C]);
+				break;
+			case 0x7a: // LD   A,D
+				ld8b(A, regs[D]);
+				break;
+			case 0x7b: // LD   A,E
+				ld8b(A, regs[E]);
+				break;
+			case 0x7c: // LD   A,H
+				ld8b(A, regs[H]);
+				break;
+			case 0x7d: // LD   A,L
+				ld8b(A, regs[L]);
+				break;
+			case 0x7e: // LD   A,(HL)
+				ld8b(A, readmem8b(H, L));
+				break;
+			case 0x7f: // LD   A,A
+				ld8b(A, regs[A]);
+				break;
 			case 0x80: // ADD  A,B
 				add8b(A, regs[B]);
 				break;
@@ -471,6 +733,30 @@ public class Z80 {
 			case 0x87: // ADD  A,A
 				add8b(A, regs[A]);
 				break;
+			case 0x88: // ADC  A,B
+				adc(A, regs[B]);
+				break;
+			case 0x89: // ADC  A,C
+				adc(A, regs[C]);
+				break;
+			case 0x8a: // ADC  A,D
+				adc(A, regs[D]);
+				break;
+			case 0x8b: // ADC  A,E
+				adc(A, regs[E]);
+				break;
+			case 0x8c: // ADC  A,H
+				adc(A, regs[H]);
+				break;
+			case 0x8d: // ADC  A,L
+				adc(A, regs[L]);
+				break;
+			case 0x8e: // ADC  A,(HL)
+				adc(A, readmem8b(H, L));
+				break;
+			case 0x8f: // ADC  A,A
+				adc(A, regs[A]);
+				break;
 			case 0x98: // SBC  A,B
 				sbc(A, regs[B]);
 				break;
@@ -494,6 +780,78 @@ public class Z80 {
 				break;
 			case 0x9f: // SBC  A,A
 				sbc(A, regs[A]);
+				break;
+			case 0xa0: // AND B
+				and(regs[B]);
+				break;
+			case 0xa1: // AND C
+				and(regs[C]);
+				break;
+			case 0xa2: // AND D
+				and(regs[D]);
+				break;
+			case 0xa3: // AND E
+				and(regs[E]);
+				break;
+			case 0xa4: // AND H
+				and(regs[H]);
+				break;
+			case 0xa5: // AND L
+				and(regs[L]);
+				break;
+			case 0xa6: // AND (HL)
+				and(readmem8b(H, L));
+				break;
+			case 0xa7: // AND A
+				and(regs[A]);
+				break;
+			case 0xa8: // XOR B
+				xor(regs[B]);
+				break;
+			case 0xa9: // XOR C
+				xor(regs[C]);
+				break;
+			case 0xaa: // XOR D
+				xor(regs[D]);
+				break;
+			case 0xab: // XOR E
+				xor(regs[E]);
+				break;
+			case 0xac: // XOR H
+				xor(regs[H]);
+				break;
+			case 0xad: // XOR L
+				xor(regs[L]);
+				break;
+			case 0xae: // XOR (HL)
+				xor(readmem8b(H, L));
+				break;
+			case 0xaf: // XOR A
+				xor(regs[A]);
+				break;
+			case 0xb0: // OR  B
+				or(regs[B]);
+				break;
+			case 0xb1: // OR  C
+				or(regs[C]);
+				break;
+			case 0xb2: // OR  D
+				or(regs[D]);
+				break;
+			case 0xb3: // OR  E
+				or(regs[E]);
+				break;
+			case 0xb4: // OR  H
+				or(regs[H]);
+				break;
+			case 0xb5: // OR  L
+				or(regs[L]);
+				break;
+			case 0xb6: // OR  (HL)
+				or(readmem8b(H, L));
+				break;
+			case 0xb7: // OR  A
+				or(regs[A]);
 				break;
 			case 0xb8: // CP   B
 				cp(regs[B]);
@@ -522,22 +880,105 @@ public class Z80 {
 			case 0xc3: // JPNNNN
 				JPnn();
 				break;
+			case 0xc9: // RET
+				PC = pop();
+				break;
+			case 0xcd: // CALL &0000
+				push(PC + 2);
+				JPnn();
+				break;
+			case 0xd1: {// POP DE
+				int x = pop();
+				regs[D] = x >> 8;
+				regs[E] = x & 0xff;
+			}
+				;
+				break;
+			case 0xd5: // PUSH DE
+				push(regs[D] << 8 | regs[E]);
+				break;
+			case 0xe0: // LDH
+				write(0xff00 | read(PC++), regs[A]);
+				break;
+			case 0xe6: // AND nn
+				and(read(PC++));
+				break;
+			case 0xea: {// LD (nnnn), A
+				int a = read(PC++);
+				int b = read(PC++);
+				ld8bmem((b << 8) + a, regs[A]);
+			}
+				break;
+			case 0xee: // XOR   &00
+				xor(read(PC++));
+				break;
+			case 0xf0: // LDH
+				regs[A] = read(0xff00 | read(PC++));
+				break;
+			case 0xf3: // DI
+				IR = 0x00;
+				break;
+			case 0xfe: // CP n
+				cp(read(PC++));
+				break;
 			case 0xda: //D4 JMP CF,&0000
-				if ((regs[FLAG_REG] & CF_Mask) != CF_Mask) { //call to nn, SP=SP-2, (SP)=PC, PC=nn;
-					System.out.println("pushed");
+				if ((regs[FLAG_REG] & CF_Mask) != CF_Mask) { //call to nn, SP=SP-2, (SP)=PC, PC=nn
 					JPnn();
+				} else {
+					PC += 2;
+				}
+				break;
+			case 0xFF: // RST &38
+				push(PC);
+				PC = 0x38;
+				break;
+			case 0xcb: // prefix instruction
+				instr = cartridge.read(PC++);
+				switch (instr) {
+					case 0x80: // RES 0,B
+						regs[B] &= ~(1 << 0);
+						break;
+					case 0x81: // RES 0,C
+						regs[C] &= ~(1 << 0);
+						break;
+					case 0x82: // RES 0,D
+						regs[D] &= ~(1 << 0);
+						break;
+					case 0x83: // RES 0,E
+						regs[E] &= ~(1 << 0);
+						break;
+					case 0x84: // RES 0,H
+						regs[H] &= ~(1 << 0);
+						break;
+					case 0x85: // RES 0,L
+						regs[L] &= ~(1 << 0);
+						break;
+					case 0x86: // RES 0,(HL)
+						writemem8b(H, L, readmem8b(H, L) & ~(1 << 0));
+						break;
+					case 0x87: // RES 0,A
+						regs[A] &= ~(1 << 0);
+						break;
+					default:
+						System.out.printf("UNKNOWN PREFIX INSTRUCTION: $%02x\n", instr);
+						PC -= 2; // we failed to execute the instruction, so restore PC
+						return false;
 				}
 				break;
 			default:
 				System.out.printf("UNKNOWN INSTRUCTION: $%02x\n", instr);
+				PC -= 1; // we failed to execute the instruction, so restore PC
 				return false;
 		}
+		PC &= 0xffff;
+		SP &= 0xffff;
 		++TotalInstrCount;
-		if(nop)
+		if (nop) {
 			++nopCount;
-		else
+		} else {
 			nopCount = 0;
-		if(nopCount > 5) {
+		}
+		if (nopCount > 5) {
 			System.out.println("Executing a lot of NOPs, aborting!");
 			return false;
 		}
@@ -545,7 +986,6 @@ public class Z80 {
 	}
 
 	protected boolean nextinstruction() {
-		printCPUstatus();
 		lastException = execute(fetch()) ? 0 : 1;
 		return lastException == 0;
 	}
