@@ -1,7 +1,6 @@
 package com.diesal11.gameboy;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -87,13 +86,5 @@ public class Disassembler
         s = op;
       }
       return s  ;
-    }
-
-    public static void main(String[] args)
-    {
-        System.out.println(Disassembler.disassemble(0));
-        System.out.println(Disassembler.disassemble(0));
-        System.out.println(Disassembler.disassemble(255));
-        System.out.println(Disassembler.disassemble(255));
     }
 }

@@ -2,7 +2,6 @@ package com.diesal11.gameboy;
 
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 
@@ -21,13 +20,13 @@ public class Cartridge {
 	private int MBC; // The MBC used in the cardridge
 
 	private boolean ram_enabled = false;// Whether RAM is enabled to read and write
-	private int		rom_bank_nr = 0;
+	private int rom_bank_nr = 0; // The ROM bank to read/write
 
 	public Cartridge(String file_name)
 	/**
-	 * constructs a new instance of Cardridge pre: fileName is the name of a
-	 * cardridge post: f an error occurred while loading getError() contains the
-	 * gives the message of the error else the cardridge is loaded into memory
+	 * constructs a new instance of Cartridge pre: fileName is the name of a
+	 * cartridge post: f an error occurred while loading getError() contains the
+	 * gives the message of the error else the cartridge is loaded into memory
 	 */
 	{
 		this.file_name = file_name;
@@ -45,14 +44,17 @@ public class Cartridge {
 
 	private void loadFromFile()
 	/*
-	 * loadFromFile loads a cardridge from a file pre: true post: if an error
-	 * occurred getError() contains the gives the message of the error else the
-	 * cardridge is loaded into ROM/RAM
+	 * loadFromFile loads a cartidge from a file
+	 * pre:  true
+	 * post: if an error occurred
+	 *         getError() contains the gives the message of the error
+	 *       else
+	 *         the cartidge is loaded into ROM/RAM
 	 */
 	{
 		/*
-		 * load the first ROM bank of the cardridge into memory used to
-		 * initialize RAM and ROM banks
+		 * load the first ROM bank of the cartridge into memory
+		 * used to initialize RAM and ROM banks
 		 */
 		int[] first_rom_bank = new int[ROM_BANK_SIZE];
 		System.out.println("Attempting to load ROM: `" + file_name + "'");
@@ -64,8 +66,7 @@ public class Cartridge {
 			// load first ROM bank into memory
 			for (int i = 0; i < ROM_BANK_SIZE; ++i)
 				first_rom_bank[i] = distream.readUnsignedByte();
-			
-			distream.close();
+
 		} catch (Exception e) {
 			err_msg = "Error while loading ROM bank #0 " + e.getMessage();
 		}
@@ -119,7 +120,7 @@ public class Cartridge {
 				ROM = new int[96][0x81];
 				System.out.println("ROM size = 1.5MByte (96 banks)");
 				break;
-		}
+		} // switch(header[0x0148])
 
 		// Determine RAM size
 		switch (first_rom_bank[0x0149]) {
@@ -162,77 +163,69 @@ public class Cartridge {
 				}
 			}
 
-			System.out.println("aaa");
-
 			t = 1;
 			// load RAM into memory
-			/*
-			 * for(int i = 0; i < RAM.length; i++) for(int j = 0; j <
-			 * RAM[i].length; j++) RAM[i][j] = distream.readUnsignedByte();
-			 */
+			/*for(int i = 0; i < RAM.length; i++)
+			    for(int j = 0; j < RAM[i].length; j++)
+			      RAM[i][j] = distream.readUnsignedByte();*/
 
 			t = 2;
-			System.out.println("Cartridge is using " + (ROM.length * ROM[0].length + RAM.length * RAM[0].length) + " bytes of ROM and RAM into memory");
+			System.out.println("Cartridge is using " + (ROM.length * ROM[0].length + RAM.length * RAM[0].length) + " bytes of ROM and RAM");
 		} catch (Exception e) {
 			err_msg = "Error while loading ROM/RAM " + e.toString() + " " + t;
 		}
 	}
 
 	public int read(int index) {
-	    /* Memorymap:
-	     * 0000-3FFF   16KB ROM Bank 00     (in cartridge, fixed at bank 00)
-	     * 4000-7FFF   16KB ROM Bank 01..NN (in cartridge, switchable bank number)
-	     * 8000-9FFF   8KB Video RAM (VRAM) (switchable bank 0-1 in CGB Mode)
-	     * A000-BFFF   8KB External RAM     (in cartridge, switchable bank, if any)
-	     * C000-CFFF   4KB Work RAM Bank 0 (WRAM)
-	     * D000-DFFF   4KB Work RAM Bank 1 (WRAM)  (switchable bank 1-7 in CGB Mode)
-	     * E000-FDFF   Same as C000-DDFF (ECHO)    (typically not used)
-	     * FE00-FE9F   Sprite Attribute Table (OAM)
-	     * FEA0-FEFF   Not Usable
-	     * FF00-FF7F   I/O Ports
-	     * FF80-FFFE   High RAM (HRAM)
-	     * FFFF        Interrupt Enable Register
-	     */
+		/* Memorymap:
+		 * 0000-3FFF   16KB ROM Bank 00     (in cartridge, fixed at bank 00)
+		 * 4000-7FFF   16KB ROM Bank 01..NN (in cartridge, switchable bank number)
+		 * 8000-9FFF   8KB Video RAM (VRAM) (switchable bank 0-1 in CGB Mode)
+		 * A000-BFFF   8KB External RAM     (in cartridge, switchable bank, if any)
+		 * C000-CFFF   4KB Work RAM Bank 0 (WRAM)
+		 * D000-DFFF   4KB Work RAM Bank 1 (WRAM)  (switchable bank 1-7 in CGB Mode)
+		 * E000-FDFF   Same as C000-DDFF (ECHO)    (typically not used)
+		 * FE00-FE9F   Sprite Attribute Table (OAM)
+		 * FEA0-FEFF   Not Usable
+		 * FF00-FF7F   I/O Ports
+		 * FF80-FFFE   High RAM (HRAM)
+		 * FFFF        Interrupt Enable Register
+		 */
 		int b = 0; // b==byte read
-		if (index < 0) { // Invalid
+		//TODO fatsoenlijk (USE rom_bank_nr)
+		if (index < 0) { //Invalid
 			System.out.println("ERROR: Cartridge.read(): No negative addresses in GameBoy memorymap.");
-			b = 0; // NOP
-		} else if (index < 0x4000) { // 16KB ROM Bank 00 (in cartridge, fixed at
-										// bank 00)
+			b = 0; //NOP
+		} else if (index < 0x4000) { //16KB ROM Bank 00     (in cartridge, fixed at bank 00)
 			b = ROM[0][index];
-		} else if (index < 0x8000) { // 16KB ROM Bank 01..NN (in cartridge,
-										// switchable bank number)
+		} else if (index < 0x8000) { //16KB ROM Bank 01..NN (in cartridge, switchable bank number)
 			System.out.println("TODO: Cartridge.read(): Bankswitching (fixed at bank 1)");
 			b = ROM[1][index];
-		} else if (index < 0xA000) { // 8KB Video RAM (VRAM) (switchable bank
-										// 0-1 in CGB Mode)
+		} else if (index < 0xA000) { //8KB Video RAM (VRAM) (switchable bank 0-1 in CGB Mode)
 			System.out.println("TODO: Cartridge.read(): VRAM Read");
 			b = 0;
-		} else if (index < 0xC00) { // 8KB External RAM (in cartridge,
-									// switchable bank, if any)
+		} else if (index < 0xC000) { //8KB External RAM     (in cartridge, switchable bank, if any)
 			System.out.println("TODO: Cartridge.read(): External RAM Read");
 			b = 0;
-		} else if (index < 0xd000) { // 4KB Work RAM Bank 0 (WRAM)
+		} else if (index < 0xd000) { //4KB Work RAM Bank 0 (WRAM)
 			System.out.println("TODO: Cartridge.read(): Internal RAM Read bank0");
 			b = 0;
-		} else if (index < 0xe000) { // 4KB Work RAM Bank 1 (WRAM) (switchable
-										// bank 1-7 in CGB Mode)
+		} else if (index < 0xe000) { //4KB Work RAM Bank 1 (WRAM)  (switchable bank 1-7 in CGB Mode)
 			System.out.println("TODO: Cartridge.read(): Internal RAM Read bank1");
 			b = 0;
-		} else if (index < 0xfe00) { // Same as C000-DDFF (ECHO) (typically not
-										// used)
+		} else if (index < 0xfe00) { //Same as C000-DDFF (ECHO)    (typically not used)
 			System.out.println("TODO: Cartridge.read(): ECHO RAM Read");
 			b = read(index - 0x2000);
-		} else if (index < 0xfea0) { // Sprite Attribute Table (OAM)
+		} else if (index < 0xfea0) { //Sprite Attribute Table (OAM)
 			System.out.println("TODO: Cartridge.read(): Sprite Attribute Table");
 			b = 0;
-		} else if (index < 0xff00) { // Not Usable
+		} else if (index < 0xff00) { //Not Usable
 			System.out.println("TODO: Cartridge.read(): Read from unusable memory (0xfea-0xfeff)");
 			b = 0;
-		} else if (index < 0xff80) { // I/O Ports
+		} else if (index < 0xff80) { //I/O Ports
 			System.out.println("TODO: Cartridge.read(): Read from IO ports");
 			b = 0;
-		} else if (index < 0xffff) { // High RAM (HRAM)
+		} else if (index < 0xffff) { //High RAM (HRAM)
 			System.out.println("TODO: Cartridge.read(): Read from High RAM (0xff80-0xfffe)");
 			b = 0;
 		} else if (index < 0x10000) { // Interrupt Enable Register (0xffff)
@@ -245,10 +238,9 @@ public class Cartridge {
 		return b;
 	}
 
-	public void write(int index, int value) {
-		// TODO Use rom_bank_nr
+	public void write(int index, int value) { // TODO fatsoenlijk
 		// Switch RAM/ROM and bank numbers
-			/*HAX*/ ROM[0][index] = value;
+		/*HAX*/ROM[0][index] = value;/*HAX*/
 		//
 		switch (MBC) {
 			case 0x0001:
@@ -274,33 +266,27 @@ public class Cartridge {
 			case 0x0006:
 				// MBC2
 				// 0000-3FFF - ROM Bank 00 (Read Only)0000-3FFF - ROM Bank 00 (Read Only)
-                // 4000-7FFF - ROM Bank 01-0F (Read Only)
-                // A000-A1FF - 512x4bits RAM, built-in into the MBC2 chip (Read/Write)
-                // 0000-1FFF - RAM Enable (Write Only)
-                // 2000-3FFF - ROM Bank Number (Write Only)
-				
-                if ((0xA0000 <= index) && (index <= 0xA1FF))
-                {
-                	System.out.println("TODO: write to internal cartridge RAM.");
-                }
-                else if ((0x0000 <= index) && (index <= 0x1FFF))
-                {
-                    if ((index & 1 << 4) == 0)
-                    {
-                        // toggle RAM enabled
-                        ram_enabled = !ram_enabled;
-                    }
+				// 4000-7FFF - ROM Bank 01-0F (Read Only)
+				// A000-A1FF - 512x4bits RAM, built-in into the MBC2 chip (Read/Write)
+				// 0000-1FFF - RAM Enable (Write Only)
+				// 2000-3FFF - ROM Bank Number (Write Only)
 
-                }
-                else if ((0x2000 <= index) && (index <= 0x3FFFF))
-                {
-                    if ((index & 1 << 4) == (1 << 4))
-                    {
-                        // Enable set ROM bank nr
-                    	value = (value == 0)?1:value;
-                        rom_bank_nr = value & 0x0F;
-                    }
-                }
+				if ((0xA0000 <= index) && (index <= 0xA1FF)) {
+					System.out.println("TODO: write to internal cartridge RAM.");
+				} else if ((0x0000 <= index) && (index <= 0x1FFF)) {
+					if ((index & 1 << 4) == 0) {
+						// toggle RAM enabled
+						ram_enabled = !ram_enabled;
+					}
+
+				} else if ((0x2000 <= index) && (index <= 0x3FFFF)) {
+					if ((index & 1 << 4) == (1 << 4)) {
+						// Enable set ROM bank nr
+						value = (value == 0) ? 1 : value;
+						rom_bank_nr = value & 0x0F;
+					}
+				}
+
 				break;
 			case 0x000F:
 			case 0x0010:
@@ -326,8 +312,8 @@ public class Cartridge {
 		}
 	}
 
-	public static void main(String[] args) throws IOException {
-		Cartridge card = new Cartridge("./SuperMarioLand.gb");
+	public static void main(String[] args) {
+		Cartridge card = new Cartridge("Pokemon Blue.gb");
 		if (card.getError() != null) {
 			System.out.println("ERROR: " + card.getError());
 		} else {
